@@ -1,5 +1,5 @@
 """
-Módulo de Gestión de Inventario Profesional
+Módulo de Gestión de Inventario
 Sistema completo de inventario con DataFrame para simulación ERP Supply Chain
 """
 import pandas as pd

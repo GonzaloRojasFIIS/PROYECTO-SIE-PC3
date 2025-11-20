@@ -140,58 +140,85 @@ if 'resultados' in st.session_state:
                     if not movs_dia.empty:
                         saldo = movs_dia.iloc[-1]['Saldo_Final']
                     else:
+                        # Si no hay movimientos previos, asumimos el stock inicial (Q_Lote * 2 según inicialización)
+                        # O mejor, buscamos el valor inicial en df_productos si pudiéramos, pero aquí usaremos una lógica segura
                         saldo = df_productos.loc[sku, 'Q_Lote_Optimo'] * 2
                     
                     data_evolucion.append({
-                        'Día': d,
+                        'Dia': d,
                         'Producto': sku,
-                        'Stock': saldo,
-                        'Costo_Total': saldo * df_productos.loc[sku, 'Costo_Unitario']
+                        'Stock': saldo
                     })
             
             df_grafico = pd.DataFrame(data_evolucion)
             
-            # Gráfico de Stock
+            # Gráfico de Stock (Restaurado)
             chart_stock = alt.Chart(df_grafico).mark_line(point=True).encode(
-                x='Día:O',
+                x=alt.X('Dia:O', title='Día'),
                 y='Stock:Q',
                 color='Producto:N',
-                tooltip=['Día', 'Producto', 'Stock']
+                tooltip=['Dia', 'Producto', 'Stock']
             ).properties(title="Niveles de Stock por Producto").interactive()
             
             st.altair_chart(chart_stock, use_container_width=True)
             
-            # Gráfico de Costo de Inventario
-            st.markdown("### 💰 Valor del Inventario en el Tiempo")
-            df_costo_diario = df_grafico.groupby('Día')['Costo_Total'].sum().reset_index()
-            
-            # Verificar que haya datos
-            if not df_costo_diario.empty and df_costo_diario['Costo_Total'].sum() > 0:
-                chart_costo = alt.Chart(df_costo_diario).mark_area(
-                    line={'color':'darkgreen'},
-                    color=alt.Gradient(
-                        gradient='linear',
-                        stops=[alt.GradientStop(color='white', offset=0),
-                               alt.GradientStop(color='darkgreen', offset=1)],
-                        x1=1, x2=1, y1=1, y2=0
-                    )
-                ).encode(
-                    x='Día:O',
-                    y=alt.Y('Costo_Total:Q', title='Valor Total (S/)'),
-                    tooltip=['Día', alt.Tooltip('Costo_Total:Q', format='S/ ,.2f')]
-                ).properties(title="Valor Total del Inventario Diario").interactive()
-                
-                st.altair_chart(chart_costo, use_container_width=True)
-            else:
-                st.warning("No hay suficientes datos de inventario para generar el gráfico de costos.")
-            
         else:
-            st.info("No hay movimientos en el Kardex para graficar.")
+            st.info("No hay movimientos en el Kardex para graficar el stock.")
+
+        # Nueva Gráfica Complementaria: Evolución del Fill Rate (Nivel de Servicio)
+        st.markdown("### 📈 Evolución del Nivel de Servicio (Fill Rate)")
+        
+        data_fill_rate = []
+        for dia_data in res['resultados_diarios']:
+            data_fill_rate.append({
+                'Dia': dia_data['dia'],
+                'Fill_Rate': dia_data['kpis'].get('fill_rate', 0)
+            })
+            
+        df_fill = pd.DataFrame(data_fill_rate)
+        
+        if not df_fill.empty:
+            chart_fill = alt.Chart(df_fill).mark_area(
+                line={'color':'#2196F3'},
+                color=alt.Gradient(
+                    gradient='linear',
+                    stops=[alt.GradientStop(color='white', offset=0),
+                           alt.GradientStop(color='#2196F3', offset=1)],
+                    x1=1, x2=1, y1=1, y2=0
+                )
+            ).encode(
+                x=alt.X('Dia:O', title='Día'),
+                y=alt.Y('Fill_Rate:Q', title='Fill Rate (%)', scale=alt.Scale(domain=[0, 100])),
+                tooltip=[alt.Tooltip('Dia', title='Día'), alt.Tooltip('Fill_Rate:Q', format='.1f')]
+            ).properties(title="Fill Rate Diario (%)").interactive()
+            
+            st.altair_chart(chart_fill, use_container_width=True)
+
+        # Gráfico de Ventas Perdidas / No Atendidas
+        st.markdown("### 📉 Unidades No Atendidas (Quiebres de Stock)")
+        
+        if 'ventas_perdidas' in res and not res['ventas_perdidas'].empty:
+            df_perdidas = res['ventas_perdidas']
+            # Agrupar por día
+            df_perdidas_dia = df_perdidas.groupby('Fecha')['Cantidad_Perdida'].sum().reset_index()
+            df_perdidas_dia.rename(columns={'Fecha': 'Dia'}, inplace=True)
+            
+            chart_perdidas = alt.Chart(df_perdidas_dia).mark_bar(color='#ef5350').encode(
+                x=alt.X('Dia:O', title='Día'),
+                y=alt.Y('Cantidad_Perdida:Q', title='Unidades Perdidas'),
+                tooltip=[alt.Tooltip('Dia', title='Día'), alt.Tooltip('Cantidad_Perdida:Q', title='Cant. Perdida')]
+            ).properties(title="Total Unidades No Despachadas por Día").interactive()
+            
+            st.altair_chart(chart_perdidas, use_container_width=True)
+        else:
+            st.success("✅ ¡Excelente! No hubo ventas perdidas en este periodo.")
 
     with tab7:
         st.subheader("📊 Reporte Diario Detallado")
         
-        dia_seleccionado = st.slider("Seleccionar Día", 1, n_dias, 1)
+        # Usar n_dias de la configuración guardada para consistencia
+        n_dias_sim = res['config']['n_dias']
+        dia_seleccionado = st.slider("Seleccionar Día", 1, n_dias_sim, 1, key="slider_dia_reporte")
         
         # Obtener datos del día
         datos_dia = res['resultados_diarios'][dia_seleccionado - 1]
