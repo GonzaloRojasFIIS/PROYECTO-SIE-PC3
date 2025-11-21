@@ -84,44 +84,41 @@ streamlit run app.py
    - Ajustar capacidad de picking
 
 5. **Ejecutar**: Hacer clic en "▶️ Ejecutar Simulación"
+├── logistica_sim/                # Paquete principal
+│   ├── simulador.ipynb          # Notebook demostrativo Jupyter
+│   ├── README.md                # Documentación del paquete
+│   └── sistema/                 # Módulos del sistema
+│       ├── __init__.py          # Exports del paquete
+│       ├── catalogos.py         # Datos maestros (productos, clientes)
+│       ├── demanda.py           # Generación de demanda/pedidos
+│       ├── inventario.py        # Gestión de inventario, Kardex y backlog
+│       ├── picking.py           # Asignación de picking
+│       ├── transporte.py        # Gestión de flota y despachos
+│       ├── indicadores.py       # Cálculo de KPIs
+│       ├── alertas.py           # Sistema de alertas
+│       └── reporte.py           # Generación de reportes y PDF
+│
+├── tests/                        # Archivos de testing
+│   ├── test_stock_logic.py
+│   ├── test_compras_kardex.py
+│   └── verify_*.py
+│
+├── app.py                        # Interfaz web Streamlit
+├── main.py                       # Motor principal de simulación
+└── README.md                     # Esta documentación
+```
 
-### Método 2: Ejecución por Consola (Programático)
+### Importación de Módulos
 
-Para usar el motor de simulación directamente:
+Para usar el sistema programáticamente:
 
 ```python
-from main import run_simulation
-
-# Ejecutar simulación de 15 días
-resultados = run_simulation(
-    n_dias=15,
-    capacidad_picking=1500,
-    escenario="normal"
-)
-
-# Acceder a los datos
-df_productos = resultados['df_productos']
-df_pedidos = resultados['df_pedidos']
-df_kardex = resultados['df_kardex']
-kpis = resultados['metricas_globales']
+# Importar clases principales
+from logistica_sim.sistema import GestionInventario, GestionTransporte
+from logistica_sim.sistema.demanda import generar_demanda_diaria
+from logistica_sim.sistema import catalogos, indicadores, alertas
 ```
 
-## 📂 Estructura del Proyecto
-
-```
-PROYECTO SIE PC3/
-│
-├── app.py                      # Interfaz web Streamlit
-├── main.py                     # Motor principal de simulación
-├── gestion_inventario.py       # Lógica de inventario y Kardex
-├── gestion_transporte.py       # Gestión de flota y despachos
-├── demanda.py                  # Generación de demanda/pedidos
-├── catalogos.py                # Datos maestros (productos, clientes)
-├── indicadores.py              # Cálculo de KPIs
-├── alertas.py                  # Sistema de alertas
-├── generador_pdf.py            # Generación de reportes PDF
-└── README.md                   # Esta documentación
-```
 
 ## 🎮 Uso de la Interfaz Web
 
@@ -294,5 +291,5 @@ Para reportar problemas o sugerencias:
 ---
 
 **Desarrollado para**: LIA S.A.C.  
-**Versión**: 1.0  
-**Última actualización**: 2025-11-20
+**Versión**: 2.0  
+**Última actualización**: 2025-11-21
