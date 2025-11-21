@@ -4,12 +4,11 @@ Script principal de ejecución con Gestión de Inventario Profesional (DataFrame
 """
 import pandas as pd
 import numpy as np
-from demanda import generar_demanda_diaria
-from gestion_inventario import GestionInventario
-from gestion_transporte import GestionTransporte
-import indicadores
-import alertas
-from catalogos import dic_zonas
+from logistica_sim.sistema.demanda import generar_demanda_diaria
+from logistica_sim.sistema.inventario import GestionInventario
+from logistica_sim.sistema.transporte import GestionTransporte
+from logistica_sim.sistema import indicadores, alertas
+from logistica_sim.sistema.catalogos import dic_zonas
 
 def run_simulation(n_dias, capacidad_picking, escenario="normal"):
     """

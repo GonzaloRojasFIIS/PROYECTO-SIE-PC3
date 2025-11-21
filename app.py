@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import main
-import catalogos
+from logistica_sim.sistema import catalogos
 import altair as alt
 
 st.set_page_config(page_title="Simulación Logística ERP", layout="wide")
@@ -391,11 +391,11 @@ if 'resultados' in st.session_state:
     st.subheader("📄 Exportar Resultados")
     
     try:
-        import generador_pdf
+        from logistica_sim.sistema import reporte
         
         if st.button("Generar Reporte PDF"):
             with st.spinner("Generando PDF..."):
-                pdf_bytes = generador_pdf.generar_pdf(res)
+                pdf_bytes = reporte.generar_pdf(res)
                 
                 st.download_button(
                     label="⬇️ Descargar Reporte PDF",

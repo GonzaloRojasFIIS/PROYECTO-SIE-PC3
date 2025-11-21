@@ -2,8 +2,8 @@
 Módulo de Indicadores
 Calcula los KPIs logísticos.
 """
-
-from catalogos import dic_vehiculos
+import pandas as pd
+from .catalogos import dic_vehiculos
 
 def calcular_kpis_diarios(pedidos_dia, pedidos_entregados, capacidad_picking, pedidos_dia_completos=None):
     """
@@ -43,5 +43,3 @@ def calcular_metricas_globales(resultados_diarios):
         "fill_rate_promedio": round(df_res['fill_rate'].mean(), 2),
         "total_pedidos": df_res['total_pedidos'].sum()
     }
-    
-import pandas as pd
