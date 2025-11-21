@@ -9,6 +9,7 @@ from gestion_inventario import GestionInventario
 from gestion_transporte import GestionTransporte
 import indicadores
 import alertas
+from catalogos import dic_zonas
 
 def run_simulation(n_dias, capacidad_picking, escenario="normal"):
     """
@@ -29,10 +30,38 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
         # 2. Recepción de Compras (Entradas de Stock)
         recepciones = gestion.recibir_ordenes_compra(dia)
         
+        # 2.1. Atender Backlog (Prioridad antes de nuevos pedidos)
+        items_backlog_despachados = gestion.atender_backlog(dia)
+        
         # 3. Procesamiento de Pedidos (Compromiso y Despacho)
         pedidos_procesados_dia = []
         pedidos_para_transporte = []
         
+        # Agregar items de backlog a transporte
+        # Agrupar por pedido para reconstruir estructura de transporte
+        backlog_por_pedido = {}
+        for item in items_backlog_despachados:
+            pid = item['id_pedido']
+            if pid not in backlog_por_pedido:
+                backlog_por_pedido[pid] = {'id_pedido': pid, 'cliente': item['cliente'], 'items': [], 'zona': 'General'} # Zona default, se podría mejorar buscando el pedido original
+                # Intentar recuperar zona del pedido original si es posible (no tenemos acceso directo fácil aquí sin buscar en historial, 
+                # pero podemos asumir que el transporte lo manejará o usar un lookup si fuera crítico. 
+                # Por ahora 'General' o intentar buscar en pedidos_dia si fuera de hoy (raro) o en un historial global)
+            
+            backlog_por_pedido[pid]['items'].append({'sku': item['sku'], 'cantidad': item['cantidad']})
+            
+        # Añadir backlog procesado a la lista de transporte
+        for pid, p_data in backlog_por_pedido.items():
+            # Buscar zona en lista_pedidos_db (histórico)
+            # Esto es un poco ineficiente pero funcional para simulación pequeña
+            zona_id_found = 'General'
+            for p_hist in lista_pedidos_db:
+                if p_hist['ID_Pedido'] == pid:
+                    zona_id_found = p_hist['Zona_ID']  # Usar ID, no nombre
+                    break
+            p_data['zona'] = zona_id_found
+            pedidos_para_transporte.append(p_data)
+
         for pedido in pedidos_dia:
             # Intentar comprometer stock
             exito, comprometidos, faltantes = gestion.comprometer_stock(pedido)
@@ -44,20 +73,28 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
             cant_solicitada = sum(i['cantidad'] for i in pedido['items'])
             cant_entregada = sum(i['cantidad'] for i in items_despachados)
             
+            # Nota: Si hubo backlog, la cantidad entregada HOY es solo lo de items_despachados.
+            # El estado "Entregado Total" debería considerar lo acumulado.
+            # En este modelo simplificado, actualizamos el registro histórico si existe o creamos uno nuevo.
+            
             estado_pedido = 'Pendiente'
             if cant_entregada == cant_solicitada:
                 estado_pedido = 'Entregado Total'
             elif cant_entregada > 0:
                 estado_pedido = 'Entregado Parcial'
             else:
-                estado_pedido = 'No Atendido'
+                # Podría ser Pendiente (Backlog) o No Atendido (Venta Perdida)
+                # Difícil distinguir aquí sin ver el interno de gestión.
+                # Asumimos 'Pendiente' si no es venta perdida explícita.
+                estado_pedido = 'Pendiente' 
             
             # Guardar registro para df_pedidos
             lista_pedidos_db.append({
                 'ID_Pedido': pedido['id_pedido'],
                 'Fecha': dia,
                 'Cliente': pedido['cliente_id'],
-                'Zona': pedido['zona_id'],
+                'Zona_ID': pedido['zona_id'],  # ID para lógica interna
+                'Zona': dic_zonas.get(pedido['zona_id'], pedido['zona_id']),  # Nombre para displaylay
                 'Producto': str([i['sku'] for i in pedido['items']]), # Simplificado para vista general
                 'Cant_Solicitada': cant_solicitada,
                 'Cant_Entregada': cant_entregada,
@@ -87,23 +124,20 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
             pedidos_procesados_dia, 
             capacidad_picking
         )
-        
         # Recalcular KPIs precisos basados en lo procesado hoy
         total_solicitado_dia = sum(p['Cant_Solicitada'] for p in lista_pedidos_db if p['Fecha'] == dia)
         total_entregado_dia = sum(p['Cant_Entregada'] for p in lista_pedidos_db if p['Fecha'] == dia)
         fill_rate_dia = (total_entregado_dia / total_solicitado_dia * 100) if total_solicitado_dia > 0 else 100
-        
         kpis_dia['fill_rate'] = round(fill_rate_dia, 2)
-        
-        # Calcular OTIF (On Time In Full) - Pedidos entregados 100% completos
-        pedidos_hoy = [p for p in lista_pedidos_db if p['Fecha'] == dia]
-        pedidos_perfectos = [p for p in pedidos_hoy if p['Cant_Solicitada'] == p['Cant_Entregada']]
-        otif_dia = (len(pedidos_perfectos) / len(pedidos_hoy) * 100) if len(pedidos_hoy) > 0 else 0
-        kpis_dia['otif'] = round(otif_dia, 2)
-        
-        # Calcular Backlog Rate (Unidades Perdidas / Total Solicitado)
+
+        # Calcular Backlog Rate correcto (Unidades pendientes, NO perdidas)
+        # Backlog = Total No Entregado - Ventas Perdidas
+        unidades_no_entregadas = total_solicitado_dia - total_entregado_dia
         unidades_perdidas_dia = sum(vp.get('Cantidad_Perdida', 0) for vp in gestion.ventas_perdidas if vp.get('Fecha') == dia)
-        backlog_rate_dia = (unidades_perdidas_dia / total_solicitado_dia * 100) if total_solicitado_dia > 0 else 0
+        unidades_backlog_dia = unidades_no_entregadas - unidades_perdidas_dia
+        if unidades_backlog_dia < 0: unidades_backlog_dia = 0  # Failsafe
+        
+        backlog_rate_dia = (unidades_backlog_dia / total_solicitado_dia * 100) if total_solicitado_dia > 0 else 0
         kpis_dia['backlog_rate'] = round(backlog_rate_dia, 2)
         
         # Calcular Utilización de Flota (Ocupación promedio de vehículos usados)
@@ -153,7 +187,8 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
         'df_kardex': tablas_inventario['df_kardex'],
         'df_flota': df_flota,
         'df_despachos': df_despachos,
-        'ventas_perdidas': pd.DataFrame(gestion.ventas_perdidas)
+        'ventas_perdidas': pd.DataFrame(gestion.ventas_perdidas),
+        'historial_backlog': pd.DataFrame(gestion.historial_backlog)
     }
 
 if __name__ == "__main__":

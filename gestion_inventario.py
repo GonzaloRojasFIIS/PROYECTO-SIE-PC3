@@ -18,6 +18,8 @@ class GestionInventario:
         self.ordenes_compra = []  # Lista de diccionarios para df_compras
         self.kardex = []          # Lista de diccionarios para df_kardex
         self.ventas_perdidas = [] # Registro de demanda insatisfecha
+        self.backlog = []         # Registro de pedidos pendientes por falta de stock (Clientes que esperan)
+        self.historial_backlog = [] # Registro histórico de todos los ingresos a backlog
         
         # Contadores de IDs
         self.contador_compras = 1
@@ -43,6 +45,7 @@ class GestionInventario:
                 'Categoria': info.get('categoria', 'General'),
                 'Stock_Seguridad': info['stock_minimo'],
                 'Punto_Reorden': int(info['stock_minimo'] * 2.0),  # Aumentado de 1.5 a 2.0
+                'Stock_Objetivo': info['stock_objetivo'], # Agregado para cálculo de reposición inteligente
                 'Lead_Time': info['lead_time_dias'],
                 'Q_Lote_Optimo': q_lote,
                 'Costo_Unitario': info['costo_unitario'],
@@ -160,11 +163,20 @@ class GestionInventario:
         Despacha un pedido.
         Lógica Profesional:
         - Si hay stock suficiente: Despacha todo.
-        - Si NO hay stock suficiente: Despacha lo que hay (Stock_Fisico -> 0) y registra el resto como Backlog/Venta Perdida.
+        - Si NO hay stock suficiente: 
+            - Evalúa si el cliente espera (Backlog) o se va (Venta Perdida) según su probabilidad.
         - NUNCA deja Stock_Fisico en negativo.
         """
+        from catalogos import dic_clientes # Importar aquí para acceder a probabilidad
+        import random
+
         items_despachados = []
+        cliente_id = pedido.get('cliente_id')
+        prob_espera = 0.5 # Default
         
+        if cliente_id and cliente_id in dic_clientes:
+            prob_espera = dic_clientes[cliente_id].get('probabilidad_espera', 0.5)
+
         for item in pedido['items']:
             sku = item['sku']
             cantidad_solicitada = item['cantidad']
@@ -173,18 +185,13 @@ class GestionInventario:
             comprometido_actual = self.df_inventario.loc[sku, 'Stock_Comprometido']
             
             # Determinar cuánto podemos despachar realmente
-            # Priorizamos el stock físico real. El comprometido es una reserva lógica, pero al despachar consumimos el físico.
             cantidad_a_despachar = min(cantidad_solicitada, stock_actual)
             
             # Actualizar Stock Físico
             if cantidad_a_despachar > 0:
                 self.df_inventario.loc[sku, 'Stock_Fisico'] -= cantidad_a_despachar
                 
-                # Reducir el comprometido asociado (si existía)
-                # Nota: Si despachamos, liberamos el compromiso.
-                # Si despachamos menos de lo solicitado, liberamos por lo que despachamos.
-                # Pero si no se pudo despachar todo, el compromiso restante ¿se mantiene o se cancela?
-                # En este modelo simple de "Venta Perdida", asumimos que lo no entregado se pierde y se libera el compromiso.
+                # Reducir el comprometido asociado
                 reducir_compromiso = min(cantidad_solicitada, comprometido_actual)
                 self.df_inventario.loc[sku, 'Stock_Comprometido'] -= reducir_compromiso
                 
@@ -199,32 +206,135 @@ class GestionInventario:
                     self.df_inventario.loc[sku, 'Stock_Fisico']
                 )
             
-            # Registrar Venta Perdida / Backlog
+            # Manejo de Faltantes: Backlog o Venta Perdida
             if cantidad_a_despachar < cantidad_solicitada:
-                cantidad_perdida = cantidad_solicitada - cantidad_a_despachar
+                cantidad_faltante = cantidad_solicitada - cantidad_a_despachar
                 
-                # Si no despachamos nada, también debemos liberar el compromiso si existía, 
-                # ya que la venta se considera "perdida" en este paso final.
-                if cantidad_a_despachar == 0 and comprometido_actual > 0:
-                     reducir_compromiso = min(cantidad_solicitada, comprometido_actual)
-                     self.df_inventario.loc[sku, 'Stock_Comprometido'] -= reducir_compromiso
+                # Decisión del Cliente: ¿Espera o se va?
+                decision_espera = random.random() < prob_espera
+                
+                if decision_espera:
+                    # BACKLOG: El cliente espera
+                    # Mantenemos el compromiso de stock si existía (o lo creamos si no, pero aquí ya debería estar comprometido en teoría)
+                    # En este modelo simple, el compromiso se libera al despachar. Si queda pendiente, 
+                    # deberíamos mantener el compromiso lógico para que no se venda a otro.
+                    # Ajuste: Si espera, nos aseguramos que el stock futuro se reserve.
+                    
+                    # Si ya había compromiso y no se despachó, se mantiene solo.
+                    # Si no había (ej. venta directa sin reserva previa), se debería crear.
+                    # Asumimos que 'comprometer_stock' ya corrió antes.
+                    
+                    # IMPORTANTE: Asegurar que el Stock Comprometido refleje este pendiente
+                    # Como comprometer_stock solo comprometió lo disponible, la parte faltante NO está en Stock_Comprometido.
+                    # Al moverlo a Backlog, debemos "comprometer" ese stock futuro (Backorder).
+                    self.df_inventario.loc[sku, 'Stock_Comprometido'] += cantidad_faltante
+                    
+                    self.backlog.append({
+                        'Fecha_Pedido': dia_actual,
+                        'ID_Pedido': pedido['id_pedido'],
+                        'Cliente': cliente_id,
+                        'Producto': sku,
+                        'Cantidad_Pendiente': cantidad_faltante,
+                        'Prioridad': prob_espera # Usar prob como proxy de prioridad/importancia
+                    })
+                    
+                    # Registrar en histórico de backlog (para reportes)
+                    self.historial_backlog.append({
+                        'Fecha_Ingreso': dia_actual,
+                        'Cliente': cliente_id,
+                        'ID_Pedido': pedido['id_pedido'],
+                        'Producto': sku,
+                        'Cantidad_Pendiente': cantidad_faltante,
+                        'Probabilidad_Espera': prob_espera,
+                        'Estado': 'Ingresado a Backlog'
+                    })
+                    
+                else:
+                    # VENTA PERDIDA: El cliente se va
+                    # Si no despachamos nada o parcial, y el cliente se va, liberamos el compromiso restante.
+                    # El compromiso actual en el DF sigue teniendo la parte no despachada.
+                    
+                    # Liberamos lo que falta porque el cliente canceló.
+                    self.df_inventario.loc[sku, 'Stock_Comprometido'] -= cantidad_faltante
+                    
+                    # Asegurar no negativos (por si acaso hubo desincronización)
+                    if self.df_inventario.loc[sku, 'Stock_Comprometido'] < 0:
+                         self.df_inventario.loc[sku, 'Stock_Comprometido'] = 0
 
-                self.ventas_perdidas.append({
-                    'Fecha': dia_actual,
-                    'Pedido_ID': pedido['id_pedido'],
-                    'Producto': sku,
-                    'Cantidad_Solicitada': cantidad_solicitada,
-                    'Cantidad_Atendida': cantidad_a_despachar,
-                    'Cantidad_Perdida': cantidad_perdida,
-                    'Motivo': 'Quiebre de Stock'
-                })
+                    self.ventas_perdidas.append({
+                        'Fecha': dia_actual,
+                        'Pedido_ID': pedido['id_pedido'],
+                        'Producto': sku,
+                        'Cantidad_Solicitada': cantidad_solicitada,
+                        'Cantidad_Atendida': cantidad_a_despachar,
+                        'Cantidad_Perdida': cantidad_faltante,
+                        'Motivo': 'Cliente no espera (Stockout)'
+                    })
         
-        # Failsafe: asegurar que no haya negativos por errores de redondeo o lógica
+        # Failsafe
         self.df_inventario['Stock_Fisico'] = self.df_inventario['Stock_Fisico'].clip(lower=0)
         self.df_inventario['Stock_Comprometido'] = self.df_inventario['Stock_Comprometido'].clip(lower=0)
         
         self._calcular_campos_derivados()
         return items_despachados
+
+    def atender_backlog(self, dia_actual):
+        """
+        Intenta despachar pedidos pendientes en el Backlog con el stock disponible.
+        Se debe llamar al inicio del día después de recibir compras.
+        """
+        items_recuperados = [] # Lista de items despachados desde backlog
+        
+        # Ordenar backlog por FIFO puro (orden de llegada)
+        # Sort in-place: Fecha asc (más antiguo primero)
+        self.backlog.sort(key=lambda x: x['Fecha_Pedido'])
+        
+        pendientes_restantes = []
+        
+        for pendiente in self.backlog:
+            sku = pendiente['Producto']
+            cantidad_pendiente = pendiente['Cantidad_Pendiente']
+            
+            stock_disponible = self.df_inventario.loc[sku, 'Stock_Fisico']
+            # Nota: Para backlog usamos Stock Físico. El Comprometido ya debería incluir estos pendientes si se gestionó bien,
+            # pero para simplificar, asumimos que el backlog tiene prioridad absoluta sobre nuevos pedidos del día.
+            
+            if stock_disponible > 0:
+                cantidad_a_despachar = min(cantidad_pendiente, stock_disponible)
+                
+                # Despachar
+                self.df_inventario.loc[sku, 'Stock_Fisico'] -= cantidad_a_despachar
+                
+                # Ajustar compromiso: Al atender backlog, liberamos la reserva que tenían.
+                if self.df_inventario.loc[sku, 'Stock_Comprometido'] > 0:
+                    self.df_inventario.loc[sku, 'Stock_Comprometido'] -= min(cantidad_a_despachar, self.df_inventario.loc[sku, 'Stock_Comprometido'])
+                
+                # Registrar Kardex
+                self._registrar_kardex(
+                    dia_actual, sku, 'VENTA_BACKLOG', -cantidad_a_despachar,
+                    self.df_inventario.loc[sku, 'Stock_Fisico']
+                )
+                
+                # Agregar a items recuperados para transporte
+                items_recuperados.append({
+                    'id_pedido': pendiente['ID_Pedido'], # Mismo ID original
+                    'cliente': pendiente['Cliente'],
+                    'sku': sku,
+                    'cantidad': cantidad_a_despachar,
+                    'es_backlog': True
+                })
+                
+                # Si queda saldo pendiente, se mantiene en backlog
+                if cantidad_a_despachar < cantidad_pendiente:
+                    pendiente['Cantidad_Pendiente'] -= cantidad_a_despachar
+                    pendientes_restantes.append(pendiente)
+            else:
+                pendientes_restantes.append(pendiente)
+                
+        self.backlog = pendientes_restantes
+        self._calcular_campos_derivados()
+        
+        return items_recuperados
     
     def verificar_reposicion(self, dia_actual, escenario="normal"):
         """
@@ -238,13 +348,19 @@ class GestionInventario:
             
             if posicion < punto_reorden:
                 q_lote = self.df_productos.loc[sku, 'Q_Lote_Optimo']
+                stock_objetivo = self.df_productos.loc[sku, 'Stock_Objetivo']
                 lead_time = self.df_productos.loc[sku, 'Lead_Time']
                 
                 if escenario == "lote_economico":
                     # Lógica específica si se requiere, por ahora usa Q_Lote_Optimo
                     pass
                 
-                cantidad_pedir = q_lote
+                # Lógica Inteligente:
+                # Pedimos el Q_Lote_Optimo (monto fijo), PERO si el déficit es muy grande (ej. Backlog alto),
+                # pedimos lo necesario para llegar al Stock Objetivo.
+                # Cantidad = Max(Q_Lote, Stock_Objetivo - Posicion_Actual)
+                deficit_para_objetivo = stock_objetivo - posicion
+                cantidad_pedir = max(q_lote, deficit_para_objetivo)
                 
                 # Crear Orden de Compra (df_compras row)
                 orden = {

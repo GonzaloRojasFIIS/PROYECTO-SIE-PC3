@@ -65,61 +65,71 @@ dic_clientes = {
         "nombre": "Industrias Mineras del Sur S.A.",
         "tipo": "Corporativo",
         "frecuencia_compra": "Alta",  # Compra frecuentemente
-        "credito_limite": 50000
+        "credito_limite": 50000,
+        "probabilidad_espera": 0.95 # Muy alta fidelidad
     },
     "C02": {
         "nombre": "Constructora Edificar SAC",
         "tipo": "Empresa Mediana",
         "frecuencia_compra": "Media",
-        "credito_limite": 25000
+        "credito_limite": 25000,
+        "probabilidad_espera": 0.60
     },
     "C03": {
         "nombre": "Agroexportadora Frutas del Norte",
         "tipo": "Empresa Grande",
         "frecuencia_compra": "Alta",
-        "credito_limite": 40000
+        "credito_limite": 40000,
+        "probabilidad_espera": 0.85
     },
     "C04": {
         "nombre": "Manufacturas Textiles Unidos",
         "tipo": "Empresa Mediana",
         "frecuencia_compra": "Media",
-        "credito_limite": 20000
+        "credito_limite": 20000,
+        "probabilidad_espera": 0.60
     },
     "C05": {
         "nombre": "Servicios Logísticos Express",
         "tipo": "Empresa Grande",
         "frecuencia_compra": "Muy Alta",
-        "credito_limite": 60000
+        "credito_limite": 60000,
+        "probabilidad_espera": 0.90
     },
     "C06": {
         "nombre": "Pesquera del Pacífico S.A.",
         "tipo": "Corporativo",
         "frecuencia_compra": "Alta",
-        "credito_limite": 45000
+        "credito_limite": 45000,
+        "probabilidad_espera": 0.95
     },
     "C07": {
         "nombre": "Plásticos Industriales SAC",
         "tipo": "Empresa Pequeña",
         "frecuencia_compra": "Baja",
-        "credito_limite": 10000
+        "credito_limite": 10000,
+        "probabilidad_espera": 0.30 # Baja fidelidad, compra donde haya
     },
     "C08": {
         "nombre": "Metalmecánica Precision EIRL",
         "tipo": "Empresa Pequeña",
         "frecuencia_compra": "Baja",
-        "credito_limite": 8000
+        "credito_limite": 8000,
+        "probabilidad_espera": 0.30
     },
     "C09": {
         "nombre": "Químicos y Solventes del Perú",
         "tipo": "Empresa Mediana",
         "frecuencia_compra": "Media",
-        "credito_limite": 30000
+        "credito_limite": 30000,
+        "probabilidad_espera": 0.60
     },
     "C10": {
         "nombre": "Transportes Carga Pesada SAC",
         "tipo": "Empresa Grande",
         "frecuencia_compra": "Alta",
-        "credito_limite": 35000
+        "credito_limite": 35000,
+        "probabilidad_espera": 0.80
     }
 }
 

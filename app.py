@@ -65,8 +65,9 @@ if 'resultados' in st.session_state:
 
     # --- Pestañas de Datos ---
     st.markdown("---")
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab_clientes, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📦 Productos (Maestro)", 
+        "👥 Maestro de Clientes",
         "🛒 Pedidos (Ventas)", 
         "🚚 Compras (Reposición)", 
         "🚛 Transporte (Flota)",
@@ -83,23 +84,91 @@ if 'resultados' in st.session_state:
             'Peso_Unitario_kg': '{:.2f} kg'
         }), use_container_width=True)
         
+    with tab_clientes:
+        st.subheader("Maestro de Clientes")
+        # Convertir diccionario a DataFrame
+        data_cli = []
+        for k, v in catalogos.dic_clientes.items():
+            r = v.copy()
+            r['ID_Cliente'] = k
+            data_cli.append(r)
+        
+        df_clientes = pd.DataFrame(data_cli)
+        # Ordenar columnas
+        cols_order = ['ID_Cliente', 'nombre', 'tipo', 'frecuencia_compra', 'credito_limite', 'probabilidad_espera']
+        # Asegurar que existan (por si acaso)
+        cols_final = [c for c in cols_order if c in df_clientes.columns]
+        df_clientes = df_clientes[cols_final]
+        
+        st.dataframe(df_clientes.style.format({
+            'credito_limite': 'S/ {:,.2f}',
+            'probabilidad_espera': '{:.0%}'
+        }), use_container_width=True)
+        
     with tab2:
         st.subheader("Registro de Pedidos (Ventas)")
-        st.dataframe(df_pedidos, use_container_width=True)
+        
+        col_f1, col_f2 = st.columns([1, 3])
+        with col_f1:
+            filtrar_ventas = st.checkbox("Filtrar por Día", key="chk_ventas")
+        
+        df_pedidos_show = df_pedidos.copy()
+        if filtrar_ventas:
+            with col_f2:
+                dia_ventas = st.slider("Seleccionar Día", 1, n_dias, 1, key="sld_ventas")
+            df_pedidos_show = df_pedidos[df_pedidos['Fecha'] == dia_ventas]
+        
+        # Ocultar Zona_ID (solo mostrar Zona con nombre)
+        if 'Zona_ID' in df_pedidos_show.columns:
+            df_pedidos_show = df_pedidos_show.drop(columns=['Zona_ID'])
+            
+        st.dataframe(df_pedidos_show, use_container_width=True)
         
         if 'ventas_perdidas' in res and not res['ventas_perdidas'].empty:
-            st.error("⚠️ Registro de Ventas Perdidas (Backlog)")
-            st.dataframe(res['ventas_perdidas'], use_container_width=True)
+            st.error("⚠️ Registro de Ventas Perdidas (No Atendidas)")
+            df_vp_show = res['ventas_perdidas'].copy()
+            if filtrar_ventas:
+                df_vp_show = df_vp_show[df_vp_show['Fecha'] == dia_ventas]
+            st.dataframe(df_vp_show, use_container_width=True)
+            
+        if 'historial_backlog' in res and not res['historial_backlog'].empty:
+            st.warning("⏳ Historial de Backlog (Clientes que SÍ esperaron)")
+            df_bl_show = res['historial_backlog'].copy()
+            if filtrar_ventas:
+                df_bl_show = df_bl_show[df_bl_show['Fecha_Ingreso'] == dia_ventas]
+            st.dataframe(df_bl_show, use_container_width=True)
         
     with tab3:
         st.subheader("Gestión de Compras (Reposición)")
-        if not df_compras.empty:
-            st.dataframe(df_compras, use_container_width=True)
+        
+        col_c1, col_c2 = st.columns([1, 3])
+        with col_c1:
+            filtrar_compras = st.checkbox("Filtrar por Día", key="chk_compras")
+            
+        df_compras_show = df_compras.copy()
+        if filtrar_compras and not df_compras.empty:
+            with col_c2:
+                dia_compras = st.slider("Seleccionar Día", 1, n_dias, 1, key="sld_compras")
+            df_compras_show = df_compras[df_compras['Fecha_Creacion'] == dia_compras]
+
+        if not df_compras_show.empty:
+            st.dataframe(df_compras_show, use_container_width=True)
         else:
             st.info("No se generaron órdenes de compra en este periodo.")
             
     with tab4:
         st.subheader("Gestión de Transporte")
+        
+        col_t_filter1, col_t_filter2 = st.columns([1, 3])
+        with col_t_filter1:
+            filtrar_transporte = st.checkbox("Filtrar por Día", key="chk_transporte")
+            
+        df_despachos_show = res['df_despachos'].copy()
+        if filtrar_transporte and not res['df_despachos'].empty:
+            with col_t_filter2:
+                dia_transporte = st.slider("Seleccionar Día", 1, n_dias, 1, key="sld_transporte")
+            df_despachos_show = df_despachos_show[df_despachos_show['Fecha_Salida'] == dia_transporte]
+
         col_t1, col_t2 = st.columns(2)
         
         with col_t1:
@@ -108,8 +177,8 @@ if 'resultados' in st.session_state:
             
         with col_t2:
             st.markdown("### 📦 Despachos Realizados")
-            if not res['df_despachos'].empty:
-                st.dataframe(res['df_despachos'].style.format({
+            if not df_despachos_show.empty:
+                st.dataframe(df_despachos_show.style.format({
                     'Peso_Total_Carga_kg': '{:.2f} kg',
                     'Porcentaje_Ocupacion': '{:.1f}%',
                     'Costo_Viaje': 'S/ {:.2f}'
@@ -119,7 +188,18 @@ if 'resultados' in st.session_state:
         
     with tab5:
         st.subheader("Kardex de Inventario")
-        st.dataframe(df_kardex, use_container_width=True)
+        
+        col_k1, col_k2 = st.columns([1, 3])
+        with col_k1:
+            filtrar_kardex = st.checkbox("Filtrar por Día", key="chk_kardex")
+            
+        df_kardex_show = df_kardex.copy()
+        if filtrar_kardex and not df_kardex.empty:
+            with col_k2:
+                dia_kardex = st.slider("Seleccionar Día", 1, n_dias, 1, key="sld_kardex")
+            df_kardex_show = df_kardex[df_kardex['Fecha'] == dia_kardex]
+
+        st.dataframe(df_kardex_show, use_container_width=True)
         
     with tab6:
         st.subheader("Evolución de Inventario")
@@ -235,9 +315,20 @@ if 'resultados' in st.session_state:
         st.markdown("### 📦 Estado del Inventario (Cierre del Día)")
         
         # Enriquecer tabla con datos maestros
+        # Enriquecer tabla con datos maestros
         df_view = estado_inv_dia.join(df_productos[['Nombre_Producto', 'Stock_Seguridad', 'Costo_Unitario']])
         df_view['Valor_Stock'] = df_view['Stock_Fisico'] * df_view['Costo_Unitario']
+        
+        # Calcular Cobertura antes de eliminar columnas (si se requiere)
+        # Nota: Stock_Seguridad se usa para el cálculo, así que lo mantenemos hasta aquí.
+        # Cobertura estimada: Stock / (Demanda Promedio aprox). Usamos Stock_Seguridad/3 como proxy de demanda diaria si no hay otro dato.
         df_view['Cobertura (Días)'] = (df_view['Stock_Fisico'] / (df_view['Stock_Seguridad'] / 3)).round(1)
+        
+        # Eliminar columnas que el usuario pidió ocultar (Solo Stock_Seguridad ahora)
+        cols_to_drop = ['Stock_Seguridad']
+        # Verificar si existen antes de borrar para evitar errores
+        cols_existing = [c for c in cols_to_drop if c in df_view.columns]
+        df_view = df_view.drop(columns=cols_existing)
         
         st.dataframe(df_view.style.format({
             'Valor_Stock': 'S/ {:.2f}',
@@ -255,28 +346,6 @@ if 'resultados' in st.session_state:
                     st.error(f"⚠️ {a}")
         else:
             st.success("✅ Sin alertas este día.")
-
-
-    # Recomendaciones
-    st.subheader("Recomendaciones")
-    
-    kpis_consolidados = pd.DataFrame([d['kpis'] for d in res['resultados_diarios']])
-    otif_promedio = kpis_consolidados['otif'].mean()
-    utilizacion_promedio = kpis_consolidados['utilizacion_flota'].mean()
-    backlog_promedio = kpis_consolidados['backlog_rate'].mean()
-    
-    if otif_promedio < 95:
-        st.info("📌 Verificar tiempos de preparación y capacidad de picking.")
-    if utilizacion_promedio > 85:
-        st.info("📌 Considerar ampliar la flota o renegociar horarios de entrega.")
-    if backlog_promedio > 5:
-        st.info("📌 Incrementar personal de picking los días de alta demanda.")
-    if utilizacion_promedio < 50:
-        st.info("📌 Optimizar rutas para consolidar carga.")
-    
-    hay_alertas_global = any(d['alertas'] for d in res['resultados_diarios'])
-    if not hay_alertas_global and otif_promedio >= 95:
-        st.success("📌 Operación estable. Mantener monitoreo.")
 
     # --- Descarga de Reporte PDF ---
     st.markdown("---")
