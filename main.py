@@ -88,14 +88,28 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
                 # Asumimos 'Pendiente' si no es venta perdida explícita.
                 estado_pedido = 'Pendiente' 
             
+            # Determinar el día de entrega efectiva (hoy si se entregó algo, sino se marca como pendiente)
+            dia_entrega = dia if cant_entregada > 0 else None
+            
+            # Crear detalle de items con cantidades
+            items_detalle = []
+            for item in pedido['items']:
+                items_detalle.append({
+                    'SKU': item['sku'],
+                    'Cant_Solicitada': item['cantidad'],
+                    'Cant_Entregada': sum(d['cantidad'] for d in items_despachados if d['sku'] == item['sku'])
+                })
+            
             # Guardar registro para df_pedidos
             lista_pedidos_db.append({
                 'ID_Pedido': pedido['id_pedido'],
                 'Fecha': dia,
+                'Fecha_Entrega': dia_entrega,
                 'Cliente': pedido['cliente_id'],
                 'Zona_ID': pedido['zona_id'],  # ID para lógica interna
-                'Zona': dic_zonas.get(pedido['zona_id'], pedido['zona_id']),  # Nombre para displaylay
+                'Zona': dic_zonas.get(pedido['zona_id'], pedido['zona_id']),  # Nombre para display
                 'Producto': str([i['sku'] for i in pedido['items']]), # Simplificado para vista general
+                'Items_Detalle': items_detalle,  # Detalle completo de productos
                 'Cant_Solicitada': cant_solicitada,
                 'Cant_Entregada': cant_entregada,
                 'Estado': estado_pedido
@@ -119,16 +133,30 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
         ordenes_generadas = gestion.verificar_reposicion(dia, escenario)
         
         # 6. Cálculo de KPIs y Alertas del Día
+        # Primero calcular los KPIs base
+        pedidos_dia_completos = [p for p in lista_pedidos_db if p['Fecha'] == dia]
+        
         kpis_dia = indicadores.calcular_kpis_diarios(
             pedidos_dia, 
             pedidos_procesados_dia, 
-            capacidad_picking
+            capacidad_picking,
+            pedidos_dia_completos  # Pasar registros completos para cálculo correcto de OTIF
         )
+        
         # Recalcular KPIs precisos basados en lo procesado hoy
         total_solicitado_dia = sum(p['Cant_Solicitada'] for p in lista_pedidos_db if p['Fecha'] == dia)
         total_entregado_dia = sum(p['Cant_Entregada'] for p in lista_pedidos_db if p['Fecha'] == dia)
         fill_rate_dia = (total_entregado_dia / total_solicitado_dia * 100) if total_solicitado_dia > 0 else 100
         kpis_dia['fill_rate'] = round(fill_rate_dia, 2)
+        
+        # OTIF: Pedidos completos entregados EL MISMO DÍA
+        pedidos_otif = [
+            p for p in pedidos_dia_completos 
+            if p['Cant_Solicitada'] == p['Cant_Entregada']  # Completo
+            and p['Fecha_Entrega'] == dia  # Entregado el mismo día
+        ]
+        otif_dia = (len(pedidos_otif) / len(pedidos_dia_completos) * 100) if len(pedidos_dia_completos) > 0 else 0
+        kpis_dia['otif'] = round(otif_dia, 2)
 
         # Calcular Backlog Rate correcto (Unidades pendientes, NO perdidas)
         # Backlog = Total No Entregado - Ventas Perdidas

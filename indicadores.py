@@ -5,18 +5,20 @@ Calcula los KPIs logísticos.
 
 from catalogos import dic_vehiculos
 
-def calcular_kpis_diarios(pedidos_dia, pedidos_entregados, capacidad_picking):
+def calcular_kpis_diarios(pedidos_dia, pedidos_entregados, capacidad_picking, pedidos_dia_completos=None):
     """
     Calcula KPIs diarios.
     Nota: pedidos_entregados puede ser una lista de pedidos o estar vacío si se calcula fuera.
+    pedidos_dia_completos: Lista de registros completos de pedidos para cálculo preciso de OTIF (opcional).
     """
     total_pedidos = len(pedidos_dia)
     
     # Si no se pasa lista de entregados, asumimos 0 para cálculos internos (se actualizarán fuera)
     total_entregados = len(pedidos_entregados)
     
-    # OTIF (Simplificado: si se entregó algo hoy, cuenta como a tiempo por ahora)
-    otif = (total_entregados / total_pedidos * 100) if total_pedidos > 0 else 0
+    # OTIF se calculará en main.py con datos precisos
+    # Aquí solo retornamos estructura base
+    otif = 0.0
     
     return {
         "otif": round(otif, 2),

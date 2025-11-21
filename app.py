@@ -118,11 +118,50 @@ if 'resultados' in st.session_state:
                 dia_ventas = st.slider("Seleccionar Día", 1, n_dias, 1, key="sld_ventas")
             df_pedidos_show = df_pedidos[df_pedidos['Fecha'] == dia_ventas]
         
-        # Ocultar Zona_ID (solo mostrar Zona con nombre)
+        # Ocultar columnas internas (Zona_ID, Items_Detalle) para la vista principal
+        columnas_ocultar = ['Zona_ID', 'Items_Detalle', 'Fecha_Entrega']
         if 'Zona_ID' in df_pedidos_show.columns:
-            df_pedidos_show = df_pedidos_show.drop(columns=['Zona_ID'])
+            df_pedidos_display = df_pedidos_show.drop(columns=[c for c in columnas_ocultar if c in df_pedidos_show.columns])
+        else:
+            df_pedidos_display = df_pedidos_show.copy()
             
-        st.dataframe(df_pedidos_show, use_container_width=True)
+        st.dataframe(df_pedidos_display, use_container_width=True)
+        
+        # Selector para ver detalle de un pedido específico
+        if 'Items_Detalle' in df_pedidos_show.columns and len(df_pedidos_show) > 0:
+            st.markdown("---")
+            st.markdown("#### 🔍 Ver Detalle de Productos de un Pedido")
+            
+            # Crear opciones de pedidos
+            opciones_pedidos = df_pedidos_show['ID_Pedido'].tolist()
+            
+            pedido_seleccionado = st.selectbox(
+                "Seleccionar ID Pedido:",
+                options=opciones_pedidos,
+                key="select_pedido_detalle"
+            )
+            
+            if pedido_seleccionado:
+                # Obtener datos del pedido seleccionado
+                pedido_data = df_pedidos_show[df_pedidos_show['ID_Pedido'] == pedido_seleccionado].iloc[0]
+                
+                # Mostrar información del pedido
+                col_det1, col_det2, col_det3, col_det4 = st.columns(4)
+                col_det1.metric("Cliente", pedido_data['Cliente'])
+                col_det2.metric("Zona", pedido_data['Zona'])
+                col_det3.metric("Estado", pedido_data['Estado'])
+                col_det4.metric("Día", pedido_data['Fecha'])
+                
+                # Mostrar detalle de items
+                items = pedido_data['Items_Detalle']
+                if items and isinstance(items, list):
+                    st.markdown("**Productos del Pedido:**")
+                    df_items = pd.DataFrame(items)
+                    st.dataframe(df_items, use_container_width=True)
+                else:
+                    st.info("No hay detalle de items disponible para este pedido.")
+        else:
+            st.info("Detalle de productos no disponible en los datos actuales.")
         
         if 'ventas_perdidas' in res and not res['ventas_perdidas'].empty:
             st.error("⚠️ Registro de Ventas Perdidas (No Atendidas)")

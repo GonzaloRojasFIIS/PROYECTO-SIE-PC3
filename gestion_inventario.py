@@ -86,15 +86,18 @@ class GestionInventario:
             self.df_inventario['Stock_En_Transito']
         )
         
-    def _registrar_kardex(self, dia, sku, tipo_movimiento, cantidad, saldo_final):
-        """Registra un movimiento en el Kardex."""
-        self.kardex.append({
+    def _registrar_kardex(self, dia, sku, tipo_movimiento, cantidad, saldo_final, id_referencia=None, tipo_referencia=None):
+        """Registra un movimiento en el Kardex con referencia opcional a pedido/compra."""
+        registro = {
             'Fecha': dia,
             'Producto': sku,
             'Tipo_Movimiento': tipo_movimiento,
             'Cantidad': cantidad,
-            'Saldo_Final': saldo_final
-        })
+            'Saldo_Final': saldo_final,
+            'ID_Referencia': id_referencia if id_referencia else '',
+            'Tipo_Referencia': tipo_referencia if tipo_referencia else ''
+        }
+        self.kardex.append(registro)
 
     def recibir_ordenes_compra(self, dia_actual):
         """
@@ -119,7 +122,9 @@ class GestionInventario:
                 # Registrar en Kardex
                 self._registrar_kardex(
                     dia_actual, sku, 'COMPRA_RECEPCION', cantidad, 
-                    self.df_inventario.loc[sku, 'Stock_Fisico']
+                    self.df_inventario.loc[sku, 'Stock_Fisico'],
+                    id_referencia=orden['ID_Compra'],
+                    tipo_referencia='compra'
                 )
                 
                 recepciones.append(orden)
@@ -203,7 +208,9 @@ class GestionInventario:
                 # Registrar en Kardex (Salida)
                 self._registrar_kardex(
                     dia_actual, sku, 'VENTA_DESPACHO', -cantidad_a_despachar,
-                    self.df_inventario.loc[sku, 'Stock_Fisico']
+                    self.df_inventario.loc[sku, 'Stock_Fisico'],
+                    id_referencia=pedido['id_pedido'],
+                    tipo_referencia='pedido'
                 )
             
             # Manejo de Faltantes: Backlog o Venta Perdida
@@ -312,7 +319,9 @@ class GestionInventario:
                 # Registrar Kardex
                 self._registrar_kardex(
                     dia_actual, sku, 'VENTA_BACKLOG', -cantidad_a_despachar,
-                    self.df_inventario.loc[sku, 'Stock_Fisico']
+                    self.df_inventario.loc[sku, 'Stock_Fisico'],
+                    id_referencia=pendiente['ID_Pedido'],
+                    tipo_referencia='pedido'
                 )
                 
                 # Agregar a items recuperados para transporte
