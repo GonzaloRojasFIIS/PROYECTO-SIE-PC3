@@ -2,6 +2,17 @@
 
 Sistema avanzado de simulación de Supply Chain con estructura de datos profesional, gestión de inventario con prevención de stock negativo, y módulo de transporte basado en capacidad de peso.
 
+## 📝 Acceso y Verificación del Sistema Desplegado (Streamlit)
+
+El presente sistema de simulación logística ha sido desplegado en un entorno interactivo (Streamlit) para su verificación y pruebas funcionales.
+
+Para iniciar la inspección de la interfaz y la ejecución de las pruebas unitarias y de integración referenciadas a continuación, por favor, acceda al siguiente **URL de Despliegue**:
+
+---
+**URL:** https://pc3-grupo8-logistica.streamlit.app/
+
+---
+
 ## 📋 Descripción General
 
 Este sistema simula operaciones logísticas completas incluyendo:
