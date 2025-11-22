@@ -113,7 +113,7 @@ class GestionTransporte:
             pedidos_para_despacho: Lista de pedidos listos (con items despachados).
             df_productos: DataFrame de productos para consultar pesos.
         """
-        from .catalogos import dic_zonas  # Importar aquí para evitar ciclos si fuera necesario
+        from .catalogos import dic_zonas
 
         if not pedidos_para_despacho:
             return [], []  # despachos_dia, pedidos_sin_asignar

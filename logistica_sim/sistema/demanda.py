@@ -9,7 +9,7 @@ def generar_demanda_diaria(dia, escenario="normal"):
     """
     Genera la lista de pedidos para un día específico.
     """
-    from .catalogos import dic_sku, dic_zonas # Importar aquí para evitar ciclos si fuera necesario
+    from .catalogos import dic_sku, dic_zonas
     
     # Preparar lista de clientes ponderada por frecuencia
     clientes_ponderados = []

@@ -280,16 +280,9 @@ Para reportar problemas o sugerencias:
 - **Transporte**: Solo se despacha lo que hay en stock físico
 - **Reposición**: Automática cuando se alcanza el punto de reorden
 
-## 🔄 Próximas Mejoras Sugeridas
-
-- [ ] Integración con bases de datos externas
-- [ ] Exportación de datos a Excel
-- [ ] Más algoritmos de ruteo para transporte
-- [ ] Predicción de demanda con ML
-- [ ] Dashboard de comparación de escenarios
-
 ---
 
 **Desarrollado para**: LIA S.A.C.  
 **Versión**: 2.0  
 **Última actualización**: 2025-11-21
+

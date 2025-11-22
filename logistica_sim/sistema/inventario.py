@@ -168,7 +168,7 @@ class GestionInventario:
                 'Q_Lote_Optimo': q_lote,
                 'Costo_Unitario': info['costo_unitario'],
                 'Precio_Venta': info['precio_venta'],
-                'Peso_Unitario_kg': info.get('peso_kg', 1.0) # Default 1kg si no existe
+                'Peso_Unitario_kg': info.get('peso_kg', 1.0)
             })
         
         self.df_productos = pd.DataFrame(datos_maestros)
@@ -290,12 +290,12 @@ class GestionInventario:
             - Evalúa si el cliente espera (Backlog) o se va (Venta Perdida) según su probabilidad.
         - NUNCA deja Stock_Fisico en negativo.
         """
-        from .catalogos import dic_clientes # Importar aquí para acceder a probabilidad
+        from .catalogos import dic_clientes
         import random
 
         items_despachados = []
         cliente_id = pedido.get('cliente_id')
-        prob_espera = 0.5 # Default
+        prob_espera = 0.5
         
         if cliente_id and cliente_id in dic_clientes:
             prob_espera = dic_clientes[cliente_id].get('probabilidad_espera', 0.5)

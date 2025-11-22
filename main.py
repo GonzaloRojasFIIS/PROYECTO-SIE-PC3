@@ -42,10 +42,7 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
         for item in items_backlog_despachados:
             pid = item['id_pedido']
             if pid not in backlog_por_pedido:
-                backlog_por_pedido[pid] = {'id_pedido': pid, 'cliente': item['cliente'], 'items': [], 'zona': 'General'} # Zona default, se podría mejorar buscando el pedido original
-                # Intentar recuperar zona del pedido original si es posible (no tenemos acceso directo fácil aquí sin buscar en historial, 
-                # pero podemos asumir que el transporte lo manejará o usar un lookup si fuera crítico. 
-                # Por ahora 'General' o intentar buscar en pedidos_dia si fuera de hoy (raro) o en un historial global)
+                backlog_por_pedido[pid] = {'id_pedido': pid, 'cliente': item['cliente'], 'items': [], 'zona': 'General'}
             
             backlog_por_pedido[pid]['items'].append({'sku': item['sku'], 'cantidad': item['cantidad']})
             
@@ -72,9 +69,7 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
             cant_solicitada = sum(i['cantidad'] for i in pedido['items'])
             cant_entregada = sum(i['cantidad'] for i in items_despachados)
             
-            # Nota: Si hubo backlog, la cantidad entregada HOY es solo lo de items_despachados.
-            # El estado "Entregado Total" debería considerar lo acumulado.
-            # En este modelo simplificado, actualizamos el registro histórico si existe o creamos uno nuevo.
+
             
             estado_pedido = 'Pendiente'
             if cant_entregada == cant_solicitada:
@@ -82,9 +77,6 @@ def run_simulation(n_dias, capacidad_picking, escenario="normal"):
             elif cant_entregada > 0:
                 estado_pedido = 'Entregado Parcial'
             else:
-                # Podría ser Pendiente (Backlog) o No Atendido (Venta Perdida)
-                # Difícil distinguir aquí sin ver el interno de gestión.
-                # Asumimos 'Pendiente' si no es venta perdida explícita.
                 estado_pedido = 'Pendiente' 
             
             # Determinar el día de entrega efectiva (hoy si se entregó algo, sino se marca como pendiente)
