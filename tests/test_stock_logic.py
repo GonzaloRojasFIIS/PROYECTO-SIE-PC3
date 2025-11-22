@@ -1,5 +1,9 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
-from gestion_inventario import GestionInventario
+from logistica_sim.sistema.inventario import GestionInventario
 
 def test_stock_logic():
     print("Iniciando prueba de lógica de Stock Comprometido...")
